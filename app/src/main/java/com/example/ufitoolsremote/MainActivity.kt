@@ -10,7 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -125,8 +124,6 @@ class MainActivity : ComponentActivity() {
 private val SmsFilterSegmentLabels = listOf("全部", "未读", "失败")
 private val QuickReplySendModeSegmentLabels = listOf("直接发送", "确认发送")
 private val LoginModeSegmentLabels = listOf("多用户优先", "兼容优先")
-private val CompactSegmentedButtonPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CompactSegmentedButtonRow(
@@ -145,7 +142,6 @@ private fun CompactSegmentedButtonRow(
                 selected = selected,
                 onClick = { onSelectedIndexChange(index) },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = labels.size),
-                contentPadding = CompactSegmentedButtonPadding,
                 icon = {}
             ) {
                 Row(
@@ -1481,8 +1477,8 @@ private fun radioRows(info: DeviceInfo?): List<Pair<String, String?>> {
         .filter { (_, value) -> !value.isNullOrBlank() }
         .let { rows -> if (info.radioAccessTechnology == null) rows.take(2) else rows }
 
-    val rows = mutableListOf("当前制式" to (info.networkType ?: "未知"))
-    rows += detailRows
+    val rows = mutableListOf<Pair<String, String?>>("当前制式" to (info.networkType ?: "未知"))
+    rows.addAll(detailRows)
     if (detailRows.isEmpty()) rows += "频段信息" to "暂无"
     return rows
 }
