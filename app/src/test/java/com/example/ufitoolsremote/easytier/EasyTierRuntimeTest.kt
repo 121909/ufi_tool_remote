@@ -1,6 +1,7 @@
 package com.example.ufitoolsremote.easytier
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -115,5 +116,39 @@ class EasyTierRuntimeTest {
         assertEquals("10.144.0.2", target.nextHopVirtualIp)
         assertEquals("12345678", target.nextHopShortPeerId)
         assertEquals(0, target.connectionCount)
+    }
+
+    @Test
+    fun parseStatus_ignoresSelfNextHopPeerIdForDirectPeer() {
+        val peerId = "abcdefabcdef1234"
+        val status = EasyTierRuntime.parseStatus(
+            raw = """
+                {
+                  "map": {
+                    "local-instance": {
+                      "running": true,
+                      "peers": [],
+                      "routes": [],
+                      "peer_route_pairs": [
+                        {
+                          "route": {
+                            "peer_id": "$peerId",
+                            "hostname": "branch",
+                            "ipv4_addr": "10.144.0.9",
+                            "next_hop_peer_id": "$peerId"
+                          },
+                          "peer": {
+                            "peer_id": "$peerId",
+                            "conns": []
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+            """.trimIndent()
+        )
+
+        assertNull(status.peers.single().nextHopPeerId)
     }
 }

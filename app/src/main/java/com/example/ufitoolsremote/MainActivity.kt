@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Memory
@@ -87,7 +89,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -123,6 +124,8 @@ class MainActivity : ComponentActivity() {
 
 private val SmsFilterSegmentLabels = listOf("全部", "未读", "失败")
 private val QuickReplySendModeSegmentLabels = listOf("直接发送", "确认发送")
+private val LoginModeSegmentLabels = listOf("多用户优先", "兼容优先")
+private val CompactSegmentedButtonPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -134,22 +137,36 @@ private fun CompactSegmentedButtonRow(
 ) {
     SingleChoiceSegmentedButtonRow(modifier = modifier.fillMaxWidth()) {
         labels.forEachIndexed { index, label ->
+            val selected = selectedIndex == index
             SegmentedButton(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 40.dp),
-                selected = selectedIndex == index,
+                selected = selected,
                 onClick = { onSelectedIndexChange(index) },
-                shape = SegmentedButtonDefaults.itemShape(index = index, count = labels.size)
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = labels.size),
+                contentPadding = CompactSegmentedButtonPadding,
+                icon = {}
             ) {
-                Text(
-                    text = label,
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (selected) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text(
+                        text = label,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
@@ -653,7 +670,9 @@ private fun EasyTierPeerDetailDialog(peer: EasyTierPeerStatus, onDismiss: () -> 
         title = {
             Column {
                 Text(peer.displayName(), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("ID ${peer.peerId}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                peer.displaySubtitle()?.let { subtitle ->
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                }
             }
         },
         text = {
@@ -848,42 +867,25 @@ private fun SettingsTab(
                         visualTransformation = PasswordVisualTransformation()
                     )
                     Text("登录模式", style = MaterialTheme.typography.labelLarge)
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 40.dp),
-                            selected = state.settings.connection.loginModePreference == LoginModePreference.MultiUserFirst,
-                            onClick = { onLoginModeChange(LoginModePreference.MultiUserFirst) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    CompactSegmentedButtonRow(
+                        labels = LoginModeSegmentLabels,
+                        selectedIndex = if (
+                            state.settings.connection.loginModePreference == LoginModePreference.MultiUserFirst
                         ) {
-                            Text(
-                                text = "多用户优先",
-                                modifier = Modifier.fillMaxWidth(),
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center
+                            0
+                        } else {
+                            1
+                        },
+                        onSelectedIndexChange = { index ->
+                            onLoginModeChange(
+                                if (index == 0) {
+                                    LoginModePreference.MultiUserFirst
+                                } else {
+                                    LoginModePreference.LegacyFirst
+                                }
                             )
                         }
-                        SegmentedButton(
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 40.dp),
-                            selected = state.settings.connection.loginModePreference == LoginModePreference.LegacyFirst,
-                            onClick = { onLoginModeChange(LoginModePreference.LegacyFirst) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                        ) {
-                            Text(
-                                text = "兼容优先",
-                                modifier = Modifier.fillMaxWidth(),
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
+                    )
                 }
             }
         }
@@ -1496,26 +1498,36 @@ private fun formatClock(millis: Long): String {
 }
 
 private fun EasyTierPeerStatus.displayName(): String {
-    return hostname?.takeIf { it.isNotBlank() } ?: "Peer ${peerId.shortPeerIdForUi()}"
+    return listOfNotNull(hostname, virtualIp)
+        .map { it.trim() }
+        .firstOrNull { it.isNotBlank() }
+        ?: "未知对端"
+}
+
+private fun EasyTierPeerStatus.displaySubtitle(): String? {
+    val title = displayName()
+    return listOfNotNull(virtualIp, version)
+        .map { it.trim() }
+        .firstOrNull { it.isNotBlank() && it != title }
 }
 
 private fun EasyTierPeerStatus.relayLabel(): String? {
-    return nextHopDisplayText()?.let { "经由 $it relay" }
+    return nextHopReadableParts().firstOrNull()?.let { "经由 $it relay" }
 }
 
 private fun EasyTierPeerStatus.nextHopDisplayText(): String? {
-    val shortPeerId = nextHopShortPeerId ?: nextHopPeerId?.shortPeerIdForUi()
-    return listOfNotNull(nextHopHostname, nextHopInstanceName, nextHopVirtualIp, shortPeerId)
-        .map { it.trim() }
-        .filter { it.isNotBlank() }
-        .distinct()
+    return nextHopReadableParts()
         .joinToString(" / ")
         .takeIf { it.isNotBlank() }
 }
 
-private fun String.shortPeerIdForUi(): String {
-    val value = trim()
-    return if (value.length > 8) value.take(8) else value
+private fun EasyTierPeerStatus.nextHopReadableParts(): List<String> {
+    val nextHopId = nextHopPeerId?.trim()?.takeIf { it.isNotBlank() } ?: return emptyList()
+    if (nextHopId == peerId.trim()) return emptyList()
+    return listOfNotNull(nextHopHostname, nextHopInstanceName, nextHopVirtualIp)
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinct()
 }
 
 private fun String.toLines(): List<String> {

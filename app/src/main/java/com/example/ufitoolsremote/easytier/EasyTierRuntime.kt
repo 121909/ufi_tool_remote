@@ -207,7 +207,9 @@ object EasyTierRuntime {
         val connections = conns.mapNotNull { connFromJson(it) }
         val latencyUs = firstConn?.objectOrNull("stats")?.longOrNull("latency_us")
             ?: firstConn?.objectOrNull("stats")?.longOrNull("latencyUs")
-        val nextHopPeerId = route?.stringOrNull("next_hop_peer_id") ?: route?.stringOrNull("nextHopPeerId")
+        val nextHopPeerId = (route?.stringOrNull("next_hop_peer_id") ?: route?.stringOrNull("nextHopPeerId"))
+            ?.trim()
+            ?.takeIf { it.isNotBlank() && it != peerId.trim() }
         return EasyTierPeerStatus(
             peerId = peerId,
             hostname = route?.stringOrNull("hostname"),
@@ -257,6 +259,7 @@ object EasyTierRuntime {
 
         return map { peer ->
             val nextHopPeerId = peer.nextHopPeerId?.trim()?.takeIf { it.isNotBlank() } ?: return@map peer
+            if (nextHopPeerId == peer.peerId.trim()) return@map peer.copy(nextHopPeerId = null)
             val nextHop = peersById[nextHopPeerId]
             peer.copy(
                 nextHopHostname = nextHop?.hostname,
