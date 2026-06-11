@@ -1,0 +1,3 @@
+# Copy this file to local.properties and update the path for your machine.
+# Android Studio may also create local.properties automatically.
+sdk.dir=D\:\\ufi-remote-build-tools\\android-build-tools\\android-sdk
