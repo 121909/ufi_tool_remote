@@ -2,6 +2,7 @@ package com.example.ufitoolsremote.data
 
 import com.example.ufitoolsremote.model.ApiResult
 import com.example.ufitoolsremote.model.ConnectionConfig
+import com.example.ufitoolsremote.model.RadioAccessTechnology
 import com.example.ufitoolsremote.network.UfiApiClient
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
@@ -51,6 +52,7 @@ class DeviceRepositoryTest {
                   "app_ver_code": "315",
                   "model": "UFI X",
                   "battery": "80",
+                  "cpu_temp": 42000,
                   "daily_data": 1073741824,
                   "monthly_data": 2147483648,
                   "client_ip": "192.168.0.8"
@@ -87,12 +89,35 @@ class DeviceRepositoryTest {
                 """.trimIndent()
             )
         )
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {
+                  "Nr_snr": "20",
+                  "nr_rsrq": "-9",
+                  "Lte_snr": "12"
+                }
+                """.trimIndent()
+            )
+        )
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {
+                  "nr5g_action_channel": "636667",
+                  "nr5g_rssi": "-70",
+                  "lte_ca_pcell_arfcn": "1851"
+                }
+                """.trimIndent()
+            )
+        )
 
         val result = repository.fetchDeviceInfo(config)
 
         assertTrue(result is ApiResult.Success)
         val info = (result as ApiResult.Success).value
         assertEquals("88", info.battery)
+        assertEquals("42.0 °C", info.cpuTemp)
         assertEquals(1073741824L, info.dailyData)
         assertEquals(2147483648L, info.monthlyData)
         assertEquals("10.10.10.2", info.ipv4)
@@ -101,16 +126,22 @@ class DeviceRepositoryTest {
         assertEquals(1048576L, info.monthlyRxBytes)
         assertEquals(2097152L, info.monthlyTxBytes)
         assertEquals(3145728L, info.monthlyTotalBytes)
+        assertEquals("5G", info.networkType)
+        assertEquals(RadioAccessTechnology.NR, info.radioAccessTechnology)
         assertEquals("B3", info.lteBand)
         assertEquals("20MHz", info.lteBandwidth)
         assertEquals("12345", info.lteCellId)
         assertEquals("321", info.ltePci)
         assertEquals("1850", info.lteFrequency)
+        assertEquals("12", info.lteSinr)
         assertEquals("N78", info.nrBand)
         assertEquals("100MHz", info.nrBandwidth)
         assertEquals("67890", info.nrCellId)
         assertEquals("654", info.nrPci)
         assertEquals("636666", info.nrFrequency)
+        assertEquals("20", info.nrSinr)
+        assertEquals("-9", info.nrRsrq)
+        assertEquals("-70", info.nrRssi)
 
         assertEquals("/api/baseDeviceInfo", server.takeRequest().path)
         val goformPath = server.takeRequest().path.orEmpty()
@@ -119,10 +150,16 @@ class DeviceRepositoryTest {
         assertTrue(goformPath.contains("wifi_access_sta_num"))
         assertTrue(goformPath.contains("Lte_bands"))
         assertTrue(goformPath.contains("Nr_cell_id"))
+        val signalPath = server.takeRequest().path.orEmpty()
+        assertTrue(signalPath.contains("Nr_snr"))
+        val aliasPath = server.takeRequest().path.orEmpty()
+        assertTrue(aliasPath.contains("nr5g_action_channel"))
     }
 
     @Test
     fun fetchDeviceInfo_missingExtendedFieldsRemainNull() = runTest {
+        server.enqueue(MockResponse().setBody("""{}"""))
+        server.enqueue(MockResponse().setBody("""{}"""))
         server.enqueue(MockResponse().setBody("""{}"""))
         server.enqueue(MockResponse().setBody("""{}"""))
 
@@ -132,6 +169,8 @@ class DeviceRepositoryTest {
         val info = (result as ApiResult.Success).value
         assertNull(info.ipv4)
         assertNull(info.ipv6)
+        assertNull(info.cpuTemp)
+        assertNull(info.radioAccessTechnology)
         assertNull(info.connectedDevices)
         assertNull(info.monthlyRxBytes)
         assertNull(info.monthlyTxBytes)
