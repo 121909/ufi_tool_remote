@@ -17,6 +17,7 @@ data class DeviceInfo(
     val iccid: String? = null,
     val signal: String? = null,
     val networkType: String? = null,
+    val radioAccessTechnology: RadioAccessTechnology? = null,
     val provider: String? = null,
     val ipv4: String? = null,
     val ipv6: String? = null,
@@ -28,11 +29,19 @@ data class DeviceInfo(
     val monthlyTxBytes: Long? = null,
     val monthlyTotalBytes: Long? = null,
     val connectedDevices: String? = null,
+    val lteRsrp: String? = null,
+    val lteSinr: String? = null,
+    val lteRsrq: String? = null,
+    val lteRssi: String? = null,
     val lteBand: String? = null,
     val lteBandwidth: String? = null,
     val lteCellId: String? = null,
     val ltePci: String? = null,
     val lteFrequency: String? = null,
+    val nrRsrp: String? = null,
+    val nrSinr: String? = null,
+    val nrRsrq: String? = null,
+    val nrRssi: String? = null,
     val nrBand: String? = null,
     val nrBandwidth: String? = null,
     val nrCellId: String? = null,
@@ -40,6 +49,11 @@ data class DeviceInfo(
     val nrFrequency: String? = null,
     val clientIp: String? = null
 )
+
+enum class RadioAccessTechnology {
+    LTE,
+    NR
+}
 
 data class StorageInfo(
     val usedBytes: Long? = null,

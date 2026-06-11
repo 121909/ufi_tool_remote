@@ -99,8 +99,8 @@ import com.example.ufitoolsremote.model.EasyTierStatus
 import com.example.ufitoolsremote.model.LoginModePreference
 import com.example.ufitoolsremote.model.QuickReplyPreset
 import com.example.ufitoolsremote.model.QuickReplySendMode
+import com.example.ufitoolsremote.model.RadioAccessTechnology
 import com.example.ufitoolsremote.model.SmsMessage
-import com.example.ufitoolsremote.model.StorageInfo
 import com.example.ufitoolsremote.ui.MainViewModel
 import com.example.ufitoolsremote.widget.WidgetActions
 import com.example.ufitoolsremote.widget.WidgetUpdater
@@ -402,9 +402,7 @@ private fun DeviceTab(
                     "IPv6" to info?.ipv6,
                     "LAN IP" to info?.lanIp,
                     "MAC" to info?.mac,
-                    "接入设备" to info?.connectedDevices,
-                    "RX" to info?.rxRate,
-                    "TX" to info?.txRate
+                    "接入设备" to info?.connectedDevices
                 )
             )
         }
@@ -423,35 +421,7 @@ private fun DeviceTab(
         item {
             InfoPanel(
                 title = "频段与基站",
-                rows = listOf(
-                    "4G 频段" to info?.lteBand,
-                    "4G 频宽" to info?.lteBandwidth,
-                    "4G 基站" to info?.lteCellId,
-                    "4G PCI" to info?.ltePci,
-                    "4G 频点" to info?.lteFrequency,
-                    "5G 频段" to info?.nrBand,
-                    "5G 频宽" to info?.nrBandwidth,
-                    "5G 基站" to info?.nrCellId,
-                    "5G PCI" to info?.nrPci,
-                    "5G 频点" to info?.nrFrequency
-                )
-            )
-        }
-        item {
-            InfoPanel(
-                title = "身份",
-                rows = listOf(
-                    "IMEI" to info?.imei,
-                    "IMSI" to info?.imsi,
-                    "ICCID" to info?.iccid,
-                    "App 版本" to info?.appVersion
-                )
-            )
-        }
-        item {
-            InfoPanel(
-                title = "存储",
-                rows = storageRows("内部存储", info?.internalStorage) + storageRows("外部存储", info?.externalStorage)
+                rows = radioRows(info)
             )
         }
         item { Spacer(Modifier.height(72.dp)) }
@@ -1184,7 +1154,7 @@ private fun InfoPanel(title: String, rows: List<Pair<String, String?>>) {
             rows.forEach { (label, value) ->
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Text(label, modifier = Modifier.width(92.dp), color = MaterialTheme.colorScheme.secondary)
-                    Text(value ?: "-", modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(value ?: "-", modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -1471,18 +1441,48 @@ private val UfiDarkColorScheme = darkColorScheme(
     onSurfaceVariant = Color(0xFFE5EDF7)
 )
 
-private fun storageRows(prefix: String, storage: StorageInfo?): List<Pair<String, String?>> {
-    return listOf(
-        "$prefix 已用" to storage?.usedBytes?.formatBytes(),
-        "$prefix 可用" to storage?.availableBytes?.formatBytes(),
-        "$prefix 总量" to storage?.totalBytes?.formatBytes()
-    )
-}
-
 private fun usedTrafficSummary(info: DeviceInfo?): String? {
     return info?.monthlyData?.formatBytes()
         ?: info?.monthlyTotalBytes?.formatBytes()
         ?: info?.dailyData?.formatBytes()
+}
+
+private fun radioRows(info: DeviceInfo?): List<Pair<String, String?>> {
+    if (info == null) return listOf("当前制式" to null)
+    val candidateRows = when (info.radioAccessTechnology) {
+        RadioAccessTechnology.LTE -> listOf(
+            "4G 频段" to info.lteBand,
+            "4G 频宽" to info.lteBandwidth,
+            "4G 基站" to info.lteCellId,
+            "4G PCI" to info.ltePci,
+            "4G 频点" to info.lteFrequency,
+            "4G RSRP" to info.lteRsrp,
+            "4G SINR" to info.lteSinr
+        )
+        RadioAccessTechnology.NR -> listOf(
+            "5G 频段" to info.nrBand,
+            "5G 频宽" to info.nrBandwidth,
+            "5G 基站" to info.nrCellId,
+            "5G PCI" to info.nrPci,
+            "5G 频点" to info.nrFrequency,
+            "5G RSRP" to info.nrRsrp,
+            "5G SINR" to info.nrSinr
+        )
+        null -> listOf(
+            "4G 频段" to info.lteBand,
+            "5G 频段" to info.nrBand,
+            "4G RSRP" to info.lteRsrp,
+            "5G RSRP" to info.nrRsrp
+        )
+    }
+    val detailRows = candidateRows
+        .filter { (_, value) -> !value.isNullOrBlank() }
+        .let { rows -> if (info.radioAccessTechnology == null) rows.take(2) else rows }
+
+    val rows = mutableListOf("当前制式" to (info.networkType ?: "未知"))
+    rows += detailRows
+    if (detailRows.isEmpty()) rows += "频段信息" to "暂无"
+    return rows
 }
 
 private fun formatSmsDate(raw: String): String {
