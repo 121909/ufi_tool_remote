@@ -5,26 +5,49 @@
     android:layout_height="wrap_content"
     android:layout_marginBottom="6dp"
     android:background="@drawable/widget_chip_surface"
-    android:orientation="vertical"
-    android:padding="8dp">
+    android:gravity="center_vertical"
+    android:minHeight="40dp"
+    android:orientation="horizontal"
+    android:paddingLeft="10dp"
+    android:paddingTop="7dp"
+    android:paddingRight="10dp"
+    android:paddingBottom="7dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_quick_reply_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#E0F2FE"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_quick_reply_meta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#94A3B8"
+            android:textSize="10sp" />
+    </LinearLayout>
 
     <TextView
-        android:id="@+id/widget_quick_reply_label"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="#0F172A"
-        android:textSize="12sp"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginLeft="8dp"
+        android:background="@drawable/widget_pill_surface"
+        android:gravity="center"
+        android:text="SMS"
+        android:textColor="#BAE6FD"
+        android:textSize="8sp"
         android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/widget_quick_reply_meta"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="#64748B"
-        android:textSize="10sp" />
 </LinearLayout>

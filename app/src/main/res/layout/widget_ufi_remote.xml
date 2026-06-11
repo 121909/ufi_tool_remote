@@ -13,90 +13,150 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/widget_title"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="UFI Remote"
-            android:textColor="#0F172A"
-            android:textSize="16sp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="UFI Remote"
+                android:textColor="#F8FAFC"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#94A3B8"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_sms_summary"
+            android:layout_width="wrap_content"
+            android:layout_height="28dp"
+            android:layout_marginLeft="8dp"
+            android:background="@drawable/widget_pill_surface"
+            android:gravity="center"
+            android:minWidth="58dp"
+            android:paddingLeft="9dp"
+            android:paddingRight="9dp"
+            android:textColor="#D9F99D"
+            android:textSize="10sp"
             android:textStyle="bold" />
 
         <ImageButton
             android:id="@+id/widget_refresh_button"
             android:layout_width="32dp"
             android:layout_height="32dp"
-            android:background="@android:color/transparent"
+            android:layout_marginLeft="6dp"
+            android:background="@drawable/widget_icon_button_surface"
             android:contentDescription="刷新"
-            android:padding="4dp"
+            android:padding="6dp"
             android:src="@android:drawable/ic_popup_sync"
-            android:tint="#0F766E" />
+            android:tint="#67E8F9" />
 
         <ImageButton
             android:id="@+id/widget_open_button"
             android:layout_width="32dp"
             android:layout_height="32dp"
-            android:background="@android:color/transparent"
+            android:layout_marginLeft="6dp"
+            android:background="@drawable/widget_icon_button_surface"
             android:contentDescription="打开应用"
-            android:padding="4dp"
+            android:padding="6dp"
             android:src="@android:drawable/ic_menu_view"
-            android:tint="#475569" />
+            android:tint="#CBD5E1" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/widget_status"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="#475569"
-        android:textSize="11sp" />
+        android:layout_marginTop="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="短信"
-        android:textColor="#0F172A"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="短信"
+            android:textColor="#E2E8F0"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_sms_hint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="点按查看"
+            android:textColor="#64748B"
+            android:textSize="10sp" />
+    </LinearLayout>
 
     <ListView
         android:id="@+id/widget_sms_list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="6dp"
         android:layout_weight="1"
+        android:clipToPadding="false"
         android:divider="@android:color/transparent"
         android:dividerHeight="6dp"
-        android:scrollbars="vertical" />
+        android:scrollbars="none" />
 
     <TextView
         android:id="@+id/widget_sms_empty"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_marginTop="6dp"
+        android:layout_weight="1"
+        android:background="@drawable/widget_item_surface"
         android:gravity="center"
-        android:padding="8dp"
+        android:padding="12dp"
         android:text="暂无短信"
-        android:textColor="#64748B"
+        android:textColor="#94A3B8"
+        android:textSize="12sp"
         android:visibility="gone" />
 
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="快捷回复"
-        android:textColor="#0F172A"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+        android:layout_marginTop="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="快捷回复"
+            android:textColor="#E2E8F0"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_quick_reply_summary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#64748B"
+            android:textSize="10sp" />
+    </LinearLayout>
 
     <LinearLayout
         android:id="@+id/widget_quick_reply_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="6dp"
         android:orientation="vertical" />
 
 </LinearLayout>

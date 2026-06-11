@@ -72,6 +72,8 @@ class UfiRemoteWidgetProvider : AppWidgetProvider() {
                 R.id.widget_status,
                 buildStatusText(settings.widgetRefreshMinutes, cache.updatedAtMillis, cache.statusText, cache.statusAtMillis)
             )
+            views.setTextViewText(R.id.widget_sms_summary, buildSmsSummary(cache.messages.size, cache.messages.count { it.isUnread }))
+            views.setTextViewText(R.id.widget_quick_reply_summary, buildQuickReplySummary(settings.quickReplies.size))
             views.setOnClickPendingIntent(
                 R.id.widget_refresh_button,
                 pendingBroadcast(context, WidgetActions.ACTION_REFRESH, widgetId)
@@ -244,11 +246,27 @@ class UfiRemoteWidgetProvider : AppWidgetProvider() {
                 } else {
                     ""
                 }
-                if (time.isBlank()) statusText else "$time $statusText"
+                if (time.isBlank()) statusText else "$statusText $time"
             } else {
                 "就绪"
             }
-            return "自动 ${refreshMinutes}m · $updated · $action"
+            return "自动 ${refreshMinutes}m · 刷新 $updated · $action"
+        }
+
+        private fun buildSmsSummary(total: Int, unread: Int): String {
+            return when {
+                unread > 0 -> "未读 $unread"
+                total > 0 -> "$total 条"
+                else -> "空"
+            }
+        }
+
+        private fun buildQuickReplySummary(count: Int): String {
+            return when (count) {
+                0 -> "未配置"
+                1 -> "1 个"
+                else -> "$count 个"
+            }
         }
 
         private const val MAX_VISIBLE_QUICK_REPLIES = 4

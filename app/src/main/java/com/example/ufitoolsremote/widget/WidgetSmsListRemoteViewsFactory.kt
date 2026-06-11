@@ -8,6 +8,7 @@ import com.example.ufitoolsremote.R
 import com.example.ufitoolsremote.UfiRemoteApplication
 import com.example.ufitoolsremote.model.SmsMessage
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -64,7 +65,21 @@ class WidgetSmsListRemoteViewsFactory(
         return runCatching {
             val parts = raw.split(",")
             if (parts.size >= 5) {
-                "${parts[0]}-${parts[1]}-${parts[2]} ${parts[3]}:${parts[4]}"
+                val now = Calendar.getInstance()
+                val year = parts[0].toIntOrNull()?.let { if (it < 100) 2000 + it else it }
+                val month = parts[1].toIntOrNull()
+                val day = parts[2].toIntOrNull()
+                val hour = parts[3].padStart(2, '0')
+                val minute = parts[4].padStart(2, '0')
+                if (
+                    year == now.get(Calendar.YEAR) &&
+                    month == now.get(Calendar.MONTH) + 1 &&
+                    day == now.get(Calendar.DAY_OF_MONTH)
+                ) {
+                    "$hour:$minute"
+                } else {
+                    "${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}"
+                }
             } else {
                 raw
             }
