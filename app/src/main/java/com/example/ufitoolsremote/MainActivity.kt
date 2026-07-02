@@ -609,15 +609,6 @@ private fun EasyTierStatusPanel(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            peer.listIpLine()?.let { ipLine ->
-                                Text(
-                                    ipLine,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
                             Text(
                                 listOfNotNull(
                                     peer.listSecondaryLabel(),
@@ -1576,7 +1567,7 @@ private fun EasyTierPeerStatus.listIpLine(): String? {
 }
 
 private fun EasyTierPeerStatus.listSecondaryLabel(): String? {
-    return version?.trim()?.takeIf { it.isNotBlank() }?.let { "版本 $it" }
+    return virtualIp?.trim()?.takeIf { it.isNotBlank() }
 }
 
 private fun EasyTierPeerStatus.displaySubtitle(): String? {
