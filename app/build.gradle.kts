@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,10 +7,20 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
-val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
-val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+
+fun propOrEnv(propertyName: String, envName: String): String? =
+    keystoreProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(envName)?.takeIf { it.isNotBlank() }
+
+val releaseKeystorePath = propOrEnv("storeFile", "ANDROID_KEYSTORE_PATH")
+val releaseKeystorePassword = propOrEnv("storePassword", "ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = propOrEnv("keyAlias", "ANDROID_KEY_ALIAS")
+val releaseKeyPassword = propOrEnv("keyPassword", "ANDROID_KEY_PASSWORD")
 val hasReleaseSigning = listOf(
     releaseKeystorePath,
     releaseKeystorePassword,
@@ -33,7 +45,7 @@ android {
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
-                storeFile = file(requireNotNull(releaseKeystorePath))
+                storeFile = rootProject.file(requireNotNull(releaseKeystorePath))
                 storePassword = requireNotNull(releaseKeystorePassword)
                 keyAlias = requireNotNull(releaseKeyAlias)
                 keyPassword = requireNotNull(releaseKeyPassword)
