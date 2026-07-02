@@ -18,7 +18,9 @@ import com.example.ufitoolsremote.model.LoginModePreference
 import com.example.ufitoolsremote.model.QuickReplyPreset
 import com.example.ufitoolsremote.model.QuickReplySendMode
 import com.example.ufitoolsremote.model.SmsMessage
+import com.example.ufitoolsremote.model.UfiAccessMode
 import com.example.ufitoolsremote.model.messageOrNull
+import com.example.ufitoolsremote.model.resolvedConnectionConfig
 import com.example.ufitoolsremote.widget.WidgetScheduler
 import com.example.ufitoolsremote.widget.WidgetUpdater
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +76,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateUfiToken(value: String) = updateConnection { copy(ufiToken = value) }
     fun updateAdminPassword(value: String) = updateConnection { copy(adminPassword = value) }
     fun updateLoginMode(value: LoginModePreference) = updateSettings { copy(connection = connection.copy(loginModePreference = value)) }
+    fun updateUfiAccessMode(value: UfiAccessMode) = updateSettings { copy(connection = connection.copy(accessMode = value)) }
     fun updateEasyTier(transform: EasyTierSettings.() -> EasyTierSettings) {
         val previous = settingsRepository.current().easyTier
         val updated = settingsRepository.updateEasyTier(transform)
@@ -184,7 +187,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun connectAndRefresh() {
-        val config = uiState.value.settings.connection
+        val config = resolvedConnection()
         if (config.normalizedBaseUrl.isBlank() || config.ufiToken.isBlank() || config.adminPassword.isBlank()) {
             _uiState.update { it.copy(message = "请填写地址、UFI-TOOLS 口令和原厂管理员密码") }
             return
@@ -200,7 +203,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refreshDevice() {
-        val config = uiState.value.settings.connection
+        val config = resolvedConnection()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingDevice = true, message = null) }
             when (val result = deviceRepository.fetchDeviceInfo(config)) {
@@ -213,7 +216,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refreshSms() {
-        val config = uiState.value.settings.connection
+        val config = resolvedConnection()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingSms = true, message = null) }
             when (val result = smsRepository.fetchSms(config)) {
@@ -235,7 +238,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendSms(number: String, content: String) {
-        val config = uiState.value.settings.connection
+        val config = resolvedConnection()
         viewModelScope.launch {
             _uiState.update { it.copy(isSendingSms = true, message = null) }
             when (val result = smsRepository.sendSms(config, number, content)) {
@@ -256,7 +259,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteSms(id: String) {
-        val config = uiState.value.settings.connection
+        val config = resolvedConnection()
         viewModelScope.launch {
             _uiState.update { it.copy(message = null) }
             when (val result = smsRepository.deleteSms(config, id)) {
@@ -278,11 +281,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearMessage() = _uiState.update { it.copy(message = null) }
 
     private fun maybeStartupRefresh(settings: AppSettings) {
-        if (didStartupRefresh || !settings.connection.isReadyForRemoteCalls()) return
+        if (didStartupRefresh || !settings.resolvedConnectionConfig().isReadyForRemoteCalls()) return
         didStartupRefresh = true
         viewModelScope.launch {
             runEasyTierBeforeRefresh(settings, manual = false)
         }
+    }
+
+    private fun resolvedConnection(): ConnectionConfig {
+        return uiState.value.settings.resolvedConnectionConfig()
     }
 
     private suspend fun runEasyTierBeforeRefresh(settings: AppSettings, manual: Boolean) {

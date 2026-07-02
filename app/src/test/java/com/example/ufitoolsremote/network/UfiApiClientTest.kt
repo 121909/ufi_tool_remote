@@ -3,6 +3,7 @@ package com.example.ufitoolsremote.network
 import com.example.ufitoolsremote.model.ApiResult
 import com.example.ufitoolsremote.model.ConnectionConfig
 import com.example.ufitoolsremote.model.LoginModePreference
+import com.example.ufitoolsremote.model.UfiAccessMode
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -12,6 +13,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.net.ServerSocket
 
 class UfiApiClientTest {
     private lateinit var server: MockWebServer
@@ -59,6 +61,23 @@ class UfiApiClientTest {
         val result = client.needToken(testConfig())
 
         assertTrue(result is ApiResult.Unauthorized)
+    }
+
+    @Test
+    fun socks5Mode_proxyUnavailableReturnsNetworkErrorWithoutDirectFallback() = runTest {
+        server.enqueue(MockResponse().setBody("""{"need_token":true}"""))
+        val unavailablePort = ServerSocket(0).use { it.localPort }
+        val config = testConfig(
+            accessMode = UfiAccessMode.EasyTierSocks5,
+            easyTierSocks5Host = "127.0.0.1",
+            easyTierSocks5Port = unavailablePort
+        )
+
+        val result = client.needToken(config)
+
+        assertTrue(result is ApiResult.NetworkError)
+        assertTrue((result as ApiResult.NetworkError).message.contains("EasyTier SOCKS5"))
+        assertEquals(0, server.requestCount)
     }
 
     @Test
@@ -145,13 +164,19 @@ class UfiApiClientTest {
     }
 
     private fun testConfig(
-        loginModePreference: LoginModePreference = LoginModePreference.LegacyFirst
+        loginModePreference: LoginModePreference = LoginModePreference.LegacyFirst,
+        accessMode: UfiAccessMode = UfiAccessMode.Direct,
+        easyTierSocks5Host: String = "127.0.0.1",
+        easyTierSocks5Port: Int = 1080
     ): ConnectionConfig {
         return ConnectionConfig(
             baseUrl = server.url("/").toString().trimEnd('/'),
             ufiToken = "abc12345",
             adminPassword = "admin",
-            loginModePreference = loginModePreference
+            loginModePreference = loginModePreference,
+            accessMode = accessMode,
+            easyTierSocks5Host = easyTierSocks5Host,
+            easyTierSocks5Port = easyTierSocks5Port
         )
     }
 }

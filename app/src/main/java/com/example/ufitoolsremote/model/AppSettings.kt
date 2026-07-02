@@ -28,6 +28,20 @@ data class EasyTierSettings(
     val logLevel: String = "info"
 )
 
+fun AppSettings.resolvedConnectionConfig(): ConnectionConfig {
+    if (connection.accessMode != UfiAccessMode.EasyTierSocks5) return connection
+
+    val resolvedHost = when (val bindHost = easyTier.socks5Host.trim()) {
+        "", "0.0.0.0", "::", "[::]" -> "127.0.0.1"
+        else -> bindHost
+    }
+
+    return connection.copy(
+        easyTierSocks5Host = resolvedHost,
+        easyTierSocks5Port = easyTier.socks5Port
+    )
+}
+
 @Serializable
 data class QuickReplyPreset(
     val id: String = UUID.randomUUID().toString(),

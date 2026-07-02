@@ -101,6 +101,7 @@ import com.example.ufitoolsremote.model.QuickReplyPreset
 import com.example.ufitoolsremote.model.QuickReplySendMode
 import com.example.ufitoolsremote.model.RadioAccessTechnology
 import com.example.ufitoolsremote.model.SmsMessage
+import com.example.ufitoolsremote.model.UfiAccessMode
 import com.example.ufitoolsremote.ui.MainViewModel
 import com.example.ufitoolsremote.widget.WidgetActions
 import com.example.ufitoolsremote.widget.WidgetUpdater
@@ -124,6 +125,7 @@ class MainActivity : ComponentActivity() {
 private val SmsFilterSegmentLabels = listOf("全部", "未读", "失败")
 private val QuickReplySendModeSegmentLabels = listOf("直接发送", "确认发送")
 private val LoginModeSegmentLabels = listOf("多用户优先", "兼容优先")
+private val UfiAccessModeSegmentLabels = listOf("直连", "EasyTier SOCKS5")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CompactSegmentedButtonRow(
@@ -268,6 +270,7 @@ fun UfiRemoteApp(viewModel: MainViewModel = viewModel()) {
                 onUfiTokenChange = viewModel::updateUfiToken,
                 onAdminPasswordChange = viewModel::updateAdminPassword,
                 onLoginModeChange = viewModel::updateLoginMode,
+                onAccessModeChange = viewModel::updateUfiAccessMode,
                 onEasyTierEnabledChange = viewModel::setEasyTierEnabled,
                 onEasyTierChange = viewModel::updateEasyTier,
                 onWidgetRefreshMinutesChange = viewModel::updateWidgetRefreshMinutes,
@@ -600,19 +603,27 @@ private fun EasyTierStatusPanel(
                         Spacer(Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                peer.displayName(),
+                                peer.listTitle(),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            peer.listIpLine()?.let { ipLine ->
+                                Text(
+                                    ipLine,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                             Text(
                                 listOfNotNull(
-                                    peer.virtualIp,
-                                    peer.latency,
+                                    peer.listSecondaryLabel(),
+                                    peer.latency ?: peer.pathLatency,
                                     relayLabel ?: "${peer.connectionCount} 条连接"
-                                )
-                                    .joinToString(" · "),
+                                ).joinToString(" · "),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.secondary,
                                 maxLines = 1,
@@ -649,19 +660,25 @@ private fun EasyTierPeerDetailDialog(peer: EasyTierPeerStatus, onDismiss: () -> 
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                DetailRow("状态", when {
-                    peer.online -> "在线"
-                    relayLabel != null -> relayLabel
-                    else -> "离线"
-                })
-                DetailRow("虚拟 IP", peer.virtualIp)
-                DetailRow("版本", peer.version)
-                DetailRow("下一跳", peer.nextHopDisplayText())
-                DetailRow("Cost", peer.cost)
-                DetailRow("路径延迟", peer.pathLatency ?: peer.latency)
-                DetailRow("代理网段", peer.proxyCidrs.takeIf { it.isNotEmpty() }?.joinToString("\n"))
+                DetailSection(title = "概览") {
+                    DetailRow("状态", when {
+                        peer.online -> "在线"
+                        relayLabel != null -> relayLabel
+                        else -> "离线"
+                    })
+                    DetailRow("内网 IP", peer.virtualIp)
+                    DetailRow("主机名", peer.hostname)
+                    DetailRow("版本", peer.version)
+                    DetailRow("Peer ID", peer.peerId)
+                }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                DetailSection(title = "路由") {
+                    DetailRow("下一跳", peer.nextHopDisplayText())
+                    DetailRow("Cost", peer.cost)
+                    DetailRow("路径延迟", peer.pathLatency ?: peer.latency)
+                    DetailRow("代理网段", peer.proxyCidrs.takeIf { it.isNotEmpty() }?.joinToString("\n"))
+                }
+
                 Text("连接详情", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 if (peer.connections.isEmpty()) {
                     Text("暂无连接详情", color = MaterialTheme.colorScheme.secondary)
@@ -676,6 +693,27 @@ private fun EasyTierPeerDetailDialog(peer: EasyTierPeerStatus, onDismiss: () -> 
             TextButton(onClick = onDismiss) { Text("关闭") }
         }
     )
+}
+
+@Composable
+private fun DetailSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            content()
+        }
+    }
 }
 
 @Composable
@@ -784,6 +822,7 @@ private fun SettingsTab(
     onUfiTokenChange: (String) -> Unit,
     onAdminPasswordChange: (String) -> Unit,
     onLoginModeChange: (LoginModePreference) -> Unit,
+    onAccessModeChange: (UfiAccessMode) -> Unit,
     onEasyTierEnabledChange: (Boolean) -> Unit,
     onEasyTierChange: (EasyTierSettings.() -> EasyTierSettings) -> Unit,
     onWidgetRefreshMinutesChange: (Int) -> Unit,
@@ -851,6 +890,34 @@ private fun SettingsTab(
                                 }
                             )
                         }
+                    )
+                    Text("访问路径", style = MaterialTheme.typography.labelLarge)
+                    CompactSegmentedButtonRow(
+                        labels = UfiAccessModeSegmentLabels,
+                        selectedIndex = if (state.settings.connection.accessMode == UfiAccessMode.Direct) 0 else 1,
+                        onSelectedIndexChange = { index ->
+                            onAccessModeChange(
+                                if (index == 0) {
+                                    UfiAccessMode.Direct
+                                } else {
+                                    UfiAccessMode.EasyTierSocks5
+                                }
+                            )
+                        }
+                    )
+                    val easyTierDialHost = state.settings.easyTier.socks5Host
+                        .trim()
+                        .takeUnless { it.isBlank() || it == "0.0.0.0" || it == "::" || it == "[::]" }
+                        ?: "127.0.0.1"
+                    Text(
+                        when (state.settings.connection.accessMode) {
+                            UfiAccessMode.Direct -> "当前直接访问 UFI 地址。"
+                            UfiAccessMode.EasyTierSocks5 -> {
+                                "当前通过 EasyTier SOCKS5 访问 UFI，失败不会回退直连。客户端将连接 $easyTierDialHost:${state.settings.easyTier.socks5Port}。"
+                            }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
                     )
                 }
             }
@@ -1500,9 +1567,24 @@ private fun EasyTierPeerStatus.displayName(): String {
         ?: "未知对端"
 }
 
+private fun EasyTierPeerStatus.listTitle(): String {
+    return hostname?.trim()?.takeIf { it.isNotBlank() } ?: displayName()
+}
+
+private fun EasyTierPeerStatus.listIpLine(): String? {
+    return virtualIp?.trim()?.takeIf { it.isNotBlank() }?.let { "内网 IP $it" }
+}
+
+private fun EasyTierPeerStatus.listSecondaryLabel(): String? {
+    return if (hostname.isNullOrBlank()) null else peerId.trim().takeIf { it.isNotBlank() }?.let { "Peer $it" }
+}
+
 private fun EasyTierPeerStatus.displaySubtitle(): String? {
-    val title = displayName()
-    return listOfNotNull(virtualIp, version)
+    val title = displayName().trim()
+    return listOfNotNull(
+        virtualIp?.trim()?.takeIf { it.isNotBlank() }?.let { "内网 IP $it" },
+        version?.trim()?.takeIf { it.isNotBlank() }?.let { "版本 $it" }
+    )
         .map { it.trim() }
         .firstOrNull { it.isNotBlank() && it != title }
 }

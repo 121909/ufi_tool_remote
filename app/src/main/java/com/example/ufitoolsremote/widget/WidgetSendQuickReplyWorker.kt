@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import com.example.ufitoolsremote.UfiRemoteApplication
 import com.example.ufitoolsremote.model.ApiResult
 import com.example.ufitoolsremote.model.messageOrNull
+import com.example.ufitoolsremote.model.resolvedConnectionConfig
 
 class WidgetSendQuickReplyWorker(
     context: Context,
@@ -13,7 +14,7 @@ class WidgetSendQuickReplyWorker(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val app = applicationContext as? UfiRemoteApplication ?: return Result.failure()
-        val connection = app.container.settingsRepository.current().connection
+        val connection = app.container.settingsRepository.current().resolvedConnectionConfig()
         val number = inputData.getString(WidgetActions.EXTRA_NUMBER).orEmpty()
         val message = inputData.getString(WidgetActions.EXTRA_MESSAGE).orEmpty()
         val label = inputData.getString(WidgetActions.EXTRA_LABEL).orEmpty().ifBlank { "快捷回复" }

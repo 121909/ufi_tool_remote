@@ -104,7 +104,9 @@ class SettingsRepository(context: Context) {
         return copy(
             baseUrl = baseUrl.trim(),
             ufiToken = ufiToken.trim(),
-            adminPassword = adminPassword.trim()
+            adminPassword = adminPassword.trim(),
+            easyTierSocks5Host = easyTierSocks5Host.trim().ifBlank { "127.0.0.1" },
+            easyTierSocks5Port = easyTierSocks5Port.coerceIn(1, 65535)
         )
     }
 

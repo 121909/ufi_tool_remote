@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import com.example.ufitoolsremote.UfiRemoteApplication
 import com.example.ufitoolsremote.model.ApiResult
 import com.example.ufitoolsremote.model.messageOrNull
+import com.example.ufitoolsremote.model.resolvedConnectionConfig
 
 class WidgetRefreshWorker(
     context: Context,
@@ -14,7 +15,7 @@ class WidgetRefreshWorker(
     override suspend fun doWork(): Result {
         val app = applicationContext as? UfiRemoteApplication ?: return Result.failure()
         val settings = app.container.settingsRepository.current()
-        val connection = settings.connection
+        val connection = settings.resolvedConnectionConfig()
         if (connection.normalizedBaseUrl.isBlank() || connection.ufiToken.isBlank() || connection.adminPassword.isBlank()) {
             app.container.smsCacheRepository.updateStatus("请先在应用里填写连接配置")
             WidgetUpdater.updateAll(applicationContext)

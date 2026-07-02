@@ -3,6 +3,7 @@ package com.example.ufitoolsremote.network
 import com.example.ufitoolsremote.model.ApiResult
 import com.example.ufitoolsremote.model.ConnectionConfig
 import com.example.ufitoolsremote.model.LoginModePreference
+import com.example.ufitoolsremote.model.UfiAccessMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -19,6 +20,8 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
@@ -220,27 +223,27 @@ class UfiApiClient(
         body: RequestBody?,
         kanoCookie: String?
     ): RawResponse {
-        val url = config.normalizedBaseUrl + pathWithQuery
-        val pathForSign = pathWithQuery.substringBefore("?")
-        val timestamp = clock()
-        val tokenHash = CryptoUtils.sha256Hex(config.ufiToken).lowercase()
-        val request = Request.Builder()
-            .url(url)
-            .method(method, body)
-            .header("kano-t", timestamp.toString())
-            .header("kano-sign", CryptoUtils.kanoSignature(method = method, path = pathForSign, timestampMillis = timestamp))
-            .header("Authorization", tokenHash)
-            .header("Accept", "application/json")
-            .apply {
-                if (!kanoCookie.isNullOrBlank()) {
-                    header("Cookie", kanoCookie)
-                    header("Kano-Cookie", kanoCookie)
-                }
-            }
-            .build()
-
         return try {
-            httpClient.newCall(request).execute().use { response ->
+            val url = config.normalizedBaseUrl + pathWithQuery
+            val pathForSign = pathWithQuery.substringBefore("?")
+            val timestamp = clock()
+            val tokenHash = CryptoUtils.sha256Hex(config.ufiToken).lowercase()
+            val request = Request.Builder()
+                .url(url)
+                .method(method, body)
+                .header("kano-t", timestamp.toString())
+                .header("kano-sign", CryptoUtils.kanoSignature(method = method, path = pathForSign, timestampMillis = timestamp))
+                .header("Authorization", tokenHash)
+                .header("Accept", "application/json")
+                .apply {
+                    if (!kanoCookie.isNullOrBlank()) {
+                        header("Cookie", kanoCookie)
+                        header("Kano-Cookie", kanoCookie)
+                    }
+                }
+                .build()
+
+            clientFor(config).newCall(request).execute().use { response ->
                 if (response.code == 401) return RawResponse.Unauthorized
                 val text = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
@@ -250,10 +253,34 @@ class UfiApiClient(
                 }
             }
         } catch (e: IOException) {
-            RawResponse.NetworkError("网络请求失败：${e.message}")
+            RawResponse.NetworkError(config.accessFailureMessage("网络请求失败：${e.message}"))
         } catch (e: IllegalArgumentException) {
-            RawResponse.NetworkError("连接地址无效：${e.message}")
+            RawResponse.NetworkError(config.accessFailureMessage("连接配置无效：${e.message}"))
         }
+    }
+
+    private fun clientFor(config: ConnectionConfig): OkHttpClient {
+        return when (config.accessMode) {
+            UfiAccessMode.Direct -> httpClient.newBuilder()
+                .proxy(Proxy.NO_PROXY)
+                .build()
+            UfiAccessMode.EasyTierSocks5 -> {
+                val host = config.normalizedEasyTierSocks5Host
+                require(host.isNotBlank()) { "EasyTier SOCKS5 代理地址不能为空" }
+                require(config.easyTierSocks5Port in 1..65535) { "EasyTier SOCKS5 代理端口必须在 1..65535 之间" }
+                httpClient.newBuilder()
+                    .proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress(host, config.easyTierSocks5Port)))
+                    .build()
+            }
+        }
+    }
+
+    private fun ConnectionConfig.accessFailureMessage(detail: String): String {
+        val mode = when (accessMode) {
+            UfiAccessMode.Direct -> "直连"
+            UfiAccessMode.EasyTierSocks5 -> "EasyTier SOCKS5"
+        }
+        return "$mode 访问失败：$detail"
     }
 
     private fun parseJsonObject(text: String): JsonObject {
