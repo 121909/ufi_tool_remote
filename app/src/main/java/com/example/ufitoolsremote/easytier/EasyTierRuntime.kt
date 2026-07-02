@@ -213,7 +213,7 @@ object EasyTierRuntime {
         return EasyTierPeerStatus(
             peerId = peerId,
             hostname = route?.stringOrNull("hostname"),
-            virtualIp = route?.ipLikeString("ipv4_addr") ?: route?.ipLikeString("ipv4Addr"),
+            virtualIp = firstVirtualIp(route, peer),
             version = route?.stringOrNull("version"),
             cost = route?.stringOrNull("cost"),
             nextHopPeerId = nextHopPeerId,
@@ -227,6 +227,25 @@ object EasyTierRuntime {
             online = connections.any { !it.isClosed },
             connections = connections
         )
+    }
+
+    private fun firstVirtualIp(route: JsonObject?, peer: JsonObject?): String? {
+        return listOf(
+            route?.ipLikeString("ipv4_addr"),
+            route?.ipLikeString("ipv4Addr"),
+            route?.ipLikeString("ipv4"),
+            route?.ipLikeString("virtual_ipv4"),
+            route?.ipLikeString("virtualIpv4"),
+            route?.ipLikeString("virtual_ip"),
+            route?.ipLikeString("virtualIp"),
+            peer?.ipLikeString("ipv4_addr"),
+            peer?.ipLikeString("ipv4Addr"),
+            peer?.ipLikeString("ipv4"),
+            peer?.ipLikeString("virtual_ipv4"),
+            peer?.ipLikeString("virtualIpv4"),
+            peer?.ipLikeString("virtual_ip"),
+            peer?.ipLikeString("virtualIp")
+        ).firstOrNull { !it.isNullOrBlank() }
     }
 
     private fun List<EasyTierPeerStatus>.withNextHopNames(

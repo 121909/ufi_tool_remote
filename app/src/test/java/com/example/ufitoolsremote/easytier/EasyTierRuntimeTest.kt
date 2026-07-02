@@ -151,4 +151,38 @@ class EasyTierRuntimeTest {
 
         assertNull(status.peers.single().nextHopPeerId)
     }
+
+    @Test
+    fun parseStatus_readsPeerVirtualIpFromAlternateRouteField() {
+        val peerId = "abcdefabcdef1234"
+        val status = EasyTierRuntime.parseStatus(
+            raw = """
+                {
+                  "map": {
+                    "local-instance": {
+                      "running": true,
+                      "peers": [],
+                      "routes": [],
+                      "peer_route_pairs": [
+                        {
+                          "route": {
+                            "peer_id": "$peerId",
+                            "hostname": "branch",
+                            "ipv4": "10.144.0.9",
+                            "version": "2.6.2"
+                          },
+                          "peer": {
+                            "peer_id": "$peerId",
+                            "conns": []
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+            """.trimIndent()
+        )
+
+        assertEquals("10.144.0.9", status.peers.single().virtualIp)
+    }
 }
