@@ -1576,7 +1576,7 @@ private fun EasyTierPeerStatus.listIpLine(): String? {
 }
 
 private fun EasyTierPeerStatus.listSecondaryLabel(): String? {
-    return if (hostname.isNullOrBlank()) null else peerId.trim().takeIf { it.isNotBlank() }?.let { "Peer $it" }
+    return version?.trim()?.takeIf { it.isNotBlank() }?.let { "版本 $it" }
 }
 
 private fun EasyTierPeerStatus.displaySubtitle(): String? {
