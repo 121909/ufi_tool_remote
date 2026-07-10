@@ -1040,8 +1040,7 @@ private fun EasyTierSettingsCard(
                 Spacer(Modifier.width(12.dp))
                 Switch(
                     checked = settings.enabled,
-                    onCheckedChange = onEnabledChange,
-                    enabled = settings.enabled || !hasChanges
+                    onCheckedChange = onEnabledChange
                 )
             }
             if (hasChanges) {
@@ -1049,7 +1048,7 @@ private fun EasyTierSettingsCard(
                     if (settings.enabled) {
                         "有未应用的修改；停用服务不会丢失草稿。"
                     } else {
-                        "有未应用的修改，应用后才能启用 EasyTier。"
+                        "启动时会自动应用当前修改。"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.secondary

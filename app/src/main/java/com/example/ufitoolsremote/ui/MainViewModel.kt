@@ -152,18 +152,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setEasyTierEnabled(enabled: Boolean) {
         if (enabled) {
-            if (_uiState.value.hasEasyTierDraftChanges) {
-                _uiState.update { it.copy(message = "请先应用 EasyTier 配置修改，再启用服务") }
+            val state = _uiState.value
+            val port = state.easyTierSocks5PortDraft.toIntOrNull()
+            if (state.easyTierDraft.socks5Enabled && (port == null || port !in 1..65535)) {
+                _uiState.update {
+                    it.copy(
+                        easyTierValidationError = EASYTIER_PORT_ERROR,
+                        message = EASYTIER_PORT_ERROR
+                    )
+                }
                 return
             }
-            val candidate = settingsRepository.current().easyTier.copy(enabled = true)
+            val candidate = state.easyTierDraft.copy(
+                enabled = true,
+                socks5Port = port?.takeIf { it in 1..65535 } ?: state.easyTierDraft.socks5Port
+            )
             val validation = EasyTierConfigBuilder.validate(candidate)
             if (validation != null) {
-                _uiState.update { it.copy(message = validation) }
+                _uiState.update { it.copy(easyTierValidationError = validation, message = validation) }
                 return
             }
-            val updated = settingsRepository.updateEasyTier { copy(enabled = true) }
-            _uiState.update { it.copy(settings = updated, message = "EasyTier 正在启动") }
+            val updated = settingsRepository.updateEasyTier { candidate }
+            _uiState.update {
+                it.copy(
+                    settings = updated,
+                    easyTierDraft = updated.easyTier,
+                    easyTierSocks5PortDraft = updated.easyTier.socks5Port.toString(),
+                    easyTierValidationError = null,
+                    message = "EasyTier 正在启动"
+                )
+            }
             EasyTierService.start(app)
             startEasyTierStatusLoop()
             refreshEasyTierStatus()
