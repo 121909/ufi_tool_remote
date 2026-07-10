@@ -44,7 +44,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(
         UfiUiState(
             settings = settingsRepository.current(),
-            messages = cacheRepository.loadMessages()
+            messages = cacheRepository.loadMessages(),
+            easyTierDraft = settingsRepository.current().easyTier,
+            easyTierSocks5PortDraft = settingsRepository.current().easyTier.socks5Port.toString()
         )
     )
     val uiState: StateFlow<UfiUiState> = _uiState.asStateFlow()
@@ -77,57 +79,83 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateAdminPassword(value: String) = updateConnection { copy(adminPassword = value) }
     fun updateLoginMode(value: LoginModePreference) = updateSettings { copy(connection = connection.copy(loginModePreference = value)) }
     fun updateUfiAccessMode(value: UfiAccessMode) = updateSettings { copy(connection = connection.copy(accessMode = value)) }
-    fun updateEasyTier(transform: EasyTierSettings.() -> EasyTierSettings) {
-        val previous = settingsRepository.current().easyTier
-        val updated = settingsRepository.updateEasyTier(transform)
-        _uiState.update { it.copy(settings = updated) }
-        val current = updated.easyTier
-        if (previous.enabled && current.enabled && previous != current) {
-            val validation = EasyTierConfigBuilder.validate(current)
-            if (validation == null) {
-                _uiState.update { it.copy(message = "EasyTier 正在重启") }
-                EasyTierService.restart(app)
-                refreshEasyTierStatus()
-            } else {
-                _uiState.update { it.copy(message = validation) }
-            }
+    fun updateEasyTierDraft(transform: EasyTierSettings.() -> EasyTierSettings) {
+        _uiState.update {
+            it.copy(
+                easyTierDraft = it.easyTierDraft.transform(),
+                easyTierValidationError = null
+            )
         }
     }
 
-    fun applyEasyTierSettings(updated: EasyTierSettings) {
+    fun updateEasyTierSocks5PortDraft(value: String) {
+        if (value.any { !it.isDigit() }) return
+        _uiState.update {
+            it.copy(
+                easyTierSocks5PortDraft = value,
+                easyTierValidationError = null
+            )
+        }
+    }
+
+    fun discardEasyTierDraft() {
+        val persisted = settingsRepository.current().easyTier
+        _uiState.update {
+            it.copy(
+                easyTierDraft = persisted,
+                easyTierSocks5PortDraft = persisted.socks5Port.toString(),
+                easyTierValidationError = null
+            )
+        }
+    }
+
+    fun applyEasyTierSettings() {
         val previous = settingsRepository.current().easyTier
-        val validation = EasyTierConfigBuilder.validate(updated)
-        if (validation != null) {
-            _uiState.update { it.copy(message = validation) }
+        val state = _uiState.value
+        val port = state.easyTierSocks5PortDraft.toIntOrNull()
+        if (state.easyTierDraft.socks5Enabled && (port == null || port !in 1..65535)) {
+            _uiState.update { it.copy(easyTierValidationError = EASYTIER_PORT_ERROR) }
             return
         }
 
-        val saved = settingsRepository.updateEasyTier { updated }
-        _uiState.update { it.copy(settings = saved) }
+        val candidate = state.easyTierDraft.copy(
+            enabled = previous.enabled,
+            socks5Port = port?.takeIf { it in 1..65535 } ?: previous.socks5Port
+        )
+        val validation = EasyTierConfigBuilder.validate(candidate)
+        if (validation != null) {
+            _uiState.update { it.copy(easyTierValidationError = validation) }
+            return
+        }
 
-        when {
-            !previous.enabled && updated.enabled -> {
-                _uiState.update { it.copy(message = "EasyTier 正在启动") }
-                EasyTierService.start(app)
-                startEasyTierStatusLoop()
-                refreshEasyTierStatus()
-            }
-            previous.enabled && !updated.enabled -> {
-                _uiState.update { it.copy(message = "EasyTier 正在停止") }
-                EasyTierService.stop(app)
-                stopEasyTierStatusLoop()
-                _uiState.update { it.copy(easyTierStatus = EasyTierStatus()) }
-            }
-            previous.enabled && updated.enabled && previous != updated -> {
-                _uiState.update { it.copy(message = "EasyTier 正在重启") }
-                EasyTierService.restart(app)
-                refreshEasyTierStatus()
-            }
+        val saved = settingsRepository.updateEasyTier { candidate }
+        val configurationChanged = previous != saved.easyTier
+        _uiState.update {
+            it.copy(
+                settings = saved,
+                easyTierDraft = saved.easyTier,
+                easyTierSocks5PortDraft = saved.easyTier.socks5Port.toString(),
+                easyTierValidationError = null,
+                message = if (previous.enabled && configurationChanged) {
+                    "EasyTier 设置已保存，正在重启"
+                } else {
+                    "EasyTier 设置已保存"
+                }
+            )
+        }
+
+        if (previous.enabled && configurationChanged) {
+            EasyTierService.restart(app)
+            refreshEasyTierStatus()
         }
     }
 
     fun setEasyTierEnabled(enabled: Boolean) {
         if (enabled) {
+            if (_uiState.value.hasEasyTierDraftChanges) {
+                _uiState.update { it.copy(message = "请先应用 EasyTier 配置修改，再启用服务") }
+                return
+            }
             val candidate = settingsRepository.current().easyTier.copy(enabled = true)
             val validation = EasyTierConfigBuilder.validate(candidate)
             if (validation != null) {
@@ -221,11 +249,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(isLoadingSms = true, message = null) }
             when (val result = smsRepository.fetchSms(config)) {
                 is ApiResult.Success -> {
-                    cacheRepository.save(result.value, statusText = "短信已刷新", statusAtMillis = System.currentTimeMillis())
-                    _uiState.update {
-                        it.copy(messages = result.value, isLoadingSms = false, message = "短信已更新")
+                    val markReadResult = smsRepository.markUnreadMessagesRead(config, result.value)
+                    val successfulIds = (markReadResult as? ApiResult.Success)?.value?.successfulIds.orEmpty()
+                    val messages = result.value.map { message ->
+                        if (message.id.trim() in successfulIds) {
+                            message.copy(tag = "0", isUnread = false)
+                        } else {
+                            message
+                        }
                     }
-                    smsRepository.markUnreadMessagesRead(config, result.value)
+                    val failedCount = when (markReadResult) {
+                        is ApiResult.Success -> markReadResult.value.failedIds.size
+                        else -> result.value.count { it.isUnread }
+                    }
+                    val statusText = if (failedCount > 0) {
+                        "短信已刷新，$failedCount 条未读状态同步失败"
+                    } else {
+                        "短信已刷新"
+                    }
+                    cacheRepository.save(
+                        messages,
+                        statusText = statusText,
+                        statusAtMillis = System.currentTimeMillis()
+                    )
+                    _uiState.update {
+                        it.copy(
+                            messages = messages,
+                            isLoadingSms = false,
+                            message = if (failedCount > 0) {
+                                "短信已更新，$failedCount 条未读状态同步失败"
+                            } else {
+                                "短信已更新"
+                            }
+                        )
+                    }
                     WidgetUpdater.updateAll(app)
                 }
                 else -> {
@@ -397,6 +454,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     companion object {
+        private const val EASYTIER_PORT_ERROR = "SOCKS5 port must be between 1 and 65535"
         private const val EASYTIER_STATUS_REFRESH_MS = 5_000L
         private const val EASYTIER_STARTUP_POLL_MS = 1_000L
         private const val EASYTIER_STARTUP_WAIT_MS = 25_000L
@@ -408,9 +466,23 @@ data class UfiUiState(
     val deviceInfo: DeviceInfo? = null,
     val messages: List<SmsMessage> = emptyList(),
     val easyTierStatus: EasyTierStatus = EasyTierStatus(),
+    val easyTierDraft: EasyTierSettings = EasyTierSettings(),
+    val easyTierSocks5PortDraft: String = EasyTierSettings().socks5Port.toString(),
+    val easyTierValidationError: String? = null,
     val isLoadingDevice: Boolean = false,
     val isLoadingSms: Boolean = false,
     val isLoadingEasyTierStatus: Boolean = false,
     val isSendingSms: Boolean = false,
     val message: String? = null
-)
+) {
+    val hasEasyTierDraftChanges: Boolean
+        get() {
+            val persisted = settings.easyTier
+            val comparableDraft = easyTierDraft.copy(
+                enabled = persisted.enabled,
+                socks5Port = persisted.socks5Port
+            )
+            return comparableDraft != persisted ||
+                easyTierSocks5PortDraft != persisted.socks5Port.toString()
+        }
+}

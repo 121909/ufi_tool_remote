@@ -13,6 +13,7 @@ class WidgetRefreshWorker(
     params: WorkerParameters
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        if (!WidgetScheduler.hasActiveWidgets(applicationContext)) return Result.success()
         val app = applicationContext as? UfiRemoteApplication ?: return Result.failure()
         val settings = app.container.settingsRepository.current()
         val connection = settings.resolvedConnectionConfig()

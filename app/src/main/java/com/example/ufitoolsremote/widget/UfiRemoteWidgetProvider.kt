@@ -8,13 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.widget.RemoteViews
-import androidx.work.Data
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import com.example.ufitoolsremote.ComposeSmsActivity
-import com.example.ufitoolsremote.MainActivity
 import com.example.ufitoolsremote.R
-import com.example.ufitoolsremote.SmsDetailActivity
 import com.example.ufitoolsremote.UfiRemoteApplication
 import com.example.ufitoolsremote.model.QuickReplyPreset
 import com.example.ufitoolsremote.model.QuickReplySendMode
@@ -37,19 +31,9 @@ class UfiRemoteWidgetProvider : AppWidgetProvider() {
         updateWidgets(context)
     }
 
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        when (intent.action) {
-            WidgetActions.ACTION_REFRESH -> WidgetScheduler.refreshNow(context)
-            WidgetActions.ACTION_OPEN_SMS_DETAIL -> openSmsDetail(context, intent)
-            WidgetActions.ACTION_OPEN_APP -> {
-                val launch = Intent(context, MainActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                }
-                context.startActivity(launch)
-            }
-            WidgetActions.ACTION_QUICK_REPLY -> handleQuickReply(context, intent)
-        }
+    override fun onDisabled(context: Context) {
+        WidgetScheduler.cancel(context)
+        super.onDisabled(context)
     }
 
     companion object {
@@ -95,7 +79,7 @@ class UfiRemoteWidgetProvider : AppWidgetProvider() {
                 PendingIntent.getBroadcast(
                     context,
                     widgetId + 4000,
-                    Intent(context, UfiRemoteWidgetProvider::class.java).apply {
+                    Intent(context, WidgetActionReceiver::class.java).apply {
                         action = WidgetActions.ACTION_OPEN_SMS_DETAIL
                     },
                     pendingFlags(mutable = true)
@@ -149,59 +133,9 @@ class UfiRemoteWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private fun handleQuickReply(context: Context, intent: Intent) {
-            val app = context.applicationContext as UfiRemoteApplication
-            val number = intent.getStringExtra(WidgetActions.EXTRA_NUMBER).orEmpty()
-            val message = intent.getStringExtra(WidgetActions.EXTRA_MESSAGE).orEmpty()
-            val label = intent.getStringExtra(WidgetActions.EXTRA_LABEL).orEmpty().ifBlank { "快捷回复" }
-            val sendMode = intent.getStringExtra(WidgetActions.EXTRA_SEND_MODE).orEmpty()
-            if (number.isBlank() || message.isBlank()) {
-                app.container.smsCacheRepository.updateStatus("快捷回复缺少号码或内容")
-                updateWidgets(context)
-                return
-            }
-
-            if (sendMode == WidgetActions.QUICK_REPLY_SEND_MODE_DIRECT) {
-                app.container.smsCacheRepository.updateStatus("正在发送：$label")
-                updateWidgets(context)
-                val work = OneTimeWorkRequestBuilder<WidgetSendQuickReplyWorker>()
-                    .setInputData(
-                        Data.Builder()
-                            .putString(WidgetActions.EXTRA_NUMBER, number)
-                            .putString(WidgetActions.EXTRA_MESSAGE, message)
-                            .putString(WidgetActions.EXTRA_LABEL, label)
-                            .build()
-                    )
-                    .build()
-                WorkManager.getInstance(context.applicationContext).enqueue(work)
-                return
-            }
-
-            val launch = Intent(context, ComposeSmsActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra(WidgetActions.EXTRA_NUMBER, number)
-                putExtra(WidgetActions.EXTRA_MESSAGE, message)
-                putExtra(WidgetActions.EXTRA_LABEL, label)
-                putExtra(WidgetActions.EXTRA_FROM_WIDGET, true)
-            }
-            context.startActivity(launch)
-        }
-
-        private fun openSmsDetail(context: Context, intent: Intent) {
-            val launch = Intent(context, SmsDetailActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra(WidgetActions.EXTRA_MESSAGE_ID, intent.getStringExtra(WidgetActions.EXTRA_MESSAGE_ID).orEmpty())
-                putExtra(WidgetActions.EXTRA_NUMBER, intent.getStringExtra(WidgetActions.EXTRA_NUMBER).orEmpty())
-                putExtra(WidgetActions.EXTRA_MESSAGE, intent.getStringExtra(WidgetActions.EXTRA_MESSAGE).orEmpty())
-                putExtra(WidgetActions.EXTRA_DATE, intent.getStringExtra(WidgetActions.EXTRA_DATE).orEmpty())
-                putExtra(WidgetActions.EXTRA_FROM_WIDGET, true)
-            }
-            context.startActivity(launch)
-        }
-
         private fun pendingQuickReply(context: Context, widgetId: Int, preset: QuickReplyPreset, index: Int): PendingIntent {
             val requestCode = widgetId * 100 + 7000 + index
-            val intent = Intent(context, UfiRemoteWidgetProvider::class.java).apply {
+            val intent = Intent(context, WidgetActionReceiver::class.java).apply {
                 action = WidgetActions.ACTION_QUICK_REPLY
                 putExtra(WidgetActions.EXTRA_NUMBER, preset.number)
                 putExtra(WidgetActions.EXTRA_MESSAGE, preset.message)
@@ -219,7 +153,7 @@ class UfiRemoteWidgetProvider : AppWidgetProvider() {
         }
 
         private fun pendingBroadcast(context: Context, action: String, requestCode: Int): PendingIntent {
-            val intent = Intent(context, UfiRemoteWidgetProvider::class.java).apply {
+            val intent = Intent(context, WidgetActionReceiver::class.java).apply {
                 this.action = action
             }
             return PendingIntent.getBroadcast(context, requestCode, intent, pendingFlags())

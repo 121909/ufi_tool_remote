@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.example.ufitoolsremote.model.ApiResult
 import com.example.ufitoolsremote.model.messageOrNull
+import com.example.ufitoolsremote.model.resolvedConnectionConfig
 import com.example.ufitoolsremote.widget.WidgetActions
 import com.example.ufitoolsremote.widget.WidgetScheduler
 import kotlinx.coroutines.launch
@@ -279,7 +280,7 @@ private fun ComposeSmsScreen(
                                 sending = true
                                 activity.lifecycleScope.launch {
                                     when (val result = app.container.smsRepository.sendSms(
-                                        app.container.settingsRepository.current().connection,
+                                        app.container.settingsRepository.current().resolvedConnectionConfig(),
                                         currentNumber,
                                         currentMessage
                                     )) {

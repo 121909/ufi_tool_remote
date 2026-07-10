@@ -24,10 +24,26 @@ class EasyTierConfigBuilderTest {
         assertTrue(config.contains("socks5_proxy = \"socks5://0.0.0.0:1088\""))
         assertTrue(config.contains("[flags]"))
         assertTrue(config.contains("no_tun = true"))
+        assertTrue(config.contains("enable_ipv6 = true"))
         assertTrue(config.contains("[[peer]]"))
         assertTrue(config.contains("uri = \"tcp://10.1.1.5:11010\""))
         assertTrue(config.contains("[[proxy_network]]"))
         assertTrue(config.contains("cidr = \"10.1.1.0/24\""))
+    }
+
+    @Test
+    fun build_keepsIpv6PeerAndListenerEnabled() {
+        val config = EasyTierConfigBuilder.build(
+            EasyTierSettings(
+                networkName = "ufi-net",
+                peers = listOf("tcp://[2001:db8::10]:11010"),
+                listeners = listOf("tcp://[::]:11010")
+            )
+        )
+
+        assertTrue(config.contains("listeners = [\"tcp://[::]:11010\"]"))
+        assertTrue(config.contains("uri = \"tcp://[2001:db8::10]:11010\""))
+        assertTrue(config.contains("enable_ipv6 = true"))
     }
 
     @Test

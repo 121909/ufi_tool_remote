@@ -355,13 +355,27 @@ object EasyTierRuntime {
     }
 
     private fun JsonObject.ipLikeString(key: String): String? {
-        val element = this[key] ?: return null
-        element.primitiveString()?.let { return it }
-        val obj = element.objectOrNull() ?: return null
-        return obj.stringOrNull("address")
-            ?: obj.stringOrNull("addr")
-            ?: obj.stringOrNull("ip")
-            ?: obj.stringOrNull("value")
+        return this[key]?.ipLikeString()
+    }
+
+    private fun JsonElement.ipLikeString(): String? {
+        primitiveString()?.trim()?.takeIf { it.isNotBlank() }?.let { value ->
+            val numericValue = value.toLongOrNull()
+            return if (numericValue == null) value else numericValue.toIpv4String()
+        }
+        val obj = objectOrNull() ?: return null
+        return listOf("address", "addr", "ip", "value")
+            .firstNotNullOfOrNull { nestedKey -> obj[nestedKey]?.ipLikeString() }
+    }
+
+    private fun Long.toIpv4String(): String? {
+        if (this !in 0L..0xffff_ffffL) return null
+        return listOf(
+            (this ushr 24) and 0xff,
+            (this ushr 16) and 0xff,
+            (this ushr 8) and 0xff,
+            this and 0xff
+        ).joinToString(".")
     }
 
     private fun Int.ifZero(fallback: () -> Int): Int = if (this == 0) fallback() else this

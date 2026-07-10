@@ -46,7 +46,7 @@ object EasyTierConfigBuilder {
             appendLine()
             appendLine("[flags]")
             appendLine("no_tun = true")
-            appendLine("enable_ipv6 = false")
+            appendLine("enable_ipv6 = true")
             appendLine()
             appendLine("[console_logger]")
             appendLine("level = \"${settings.logLevel.tomlEscape()}\"")

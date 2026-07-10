@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import com.example.ufitoolsremote.model.ApiResult
 import com.example.ufitoolsremote.model.SmsMessage
 import com.example.ufitoolsremote.model.messageOrNull
+import com.example.ufitoolsremote.model.resolvedConnectionConfig
 import com.example.ufitoolsremote.util.SmsContentUtils
 import com.example.ufitoolsremote.widget.WidgetActions
 import com.example.ufitoolsremote.widget.WidgetUpdater
@@ -460,7 +461,7 @@ private fun SmsDetailScreen(
                         confirmDelete = false
                         deleting = true
                         scope.launch {
-                            val config = app.container.settingsRepository.current().connection
+                            val config = app.container.settingsRepository.current().resolvedConnectionConfig()
                             when (val result = app.container.smsRepository.deleteSms(config, message.id)) {
                                 is ApiResult.Success -> {
                                     val refreshed = app.container.smsRepository.fetchSms(config)

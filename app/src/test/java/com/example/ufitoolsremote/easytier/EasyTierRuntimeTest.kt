@@ -185,4 +185,66 @@ class EasyTierRuntimeTest {
 
         assertEquals("10.144.0.9", status.peers.single().virtualIp)
     }
+
+    @Test
+    fun parseStatus_readsPeerVirtualIpFromProtobufIpv4Inet() {
+        val peerId = "abcdefabcdef1234"
+        val status = EasyTierRuntime.parseStatus(
+            raw = """
+                {
+                  "map": {
+                    "local-instance": {
+                      "running": true,
+                      "peers": [],
+                      "routes": [],
+                      "peer_route_pairs": [
+                        {
+                          "route": {
+                            "peer_id": "$peerId",
+                            "hostname": "branch",
+                            "ipv4_addr": {
+                              "address": { "addr": 177209353 },
+                              "network_length": 24
+                            }
+                          },
+                          "peer": {
+                            "peer_id": "$peerId",
+                            "conns": []
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+            """.trimIndent()
+        )
+
+        assertEquals("10.144.0.9", status.peers.single().virtualIp)
+    }
+
+    @Test
+    fun parseStatus_readsInstanceVirtualIpFromProtobufIpv4Inet() {
+        val status = EasyTierRuntime.parseStatus(
+            raw = """
+                {
+                  "map": {
+                    "local-instance": {
+                      "running": true,
+                      "peers": [],
+                      "routes": [],
+                      "my_node_info": {
+                        "hostname": "local",
+                        "virtual_ipv4": {
+                          "address": { "addr": 177209346 },
+                          "network_length": 24
+                        }
+                      }
+                    }
+                  }
+                }
+            """.trimIndent()
+        )
+
+        assertEquals("10.144.0.2", status.instances.single().virtualIp)
+    }
 }

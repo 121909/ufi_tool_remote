@@ -2,6 +2,7 @@ package com.example.ufitoolsremote.data
 
 import com.example.ufitoolsremote.model.ApiResult
 import com.example.ufitoolsremote.model.ConnectionConfig
+import com.example.ufitoolsremote.model.SmsMessage
 import com.example.ufitoolsremote.network.UfiApiClient
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
@@ -169,6 +170,54 @@ class SmsRepositoryTest {
     }
 
     @Test
+    fun markUnreadMessagesRead_reusesOneSessionAndReportsOnlySuccessfulIds() = runTest {
+        enqueueSuccessfulSession()
+        enqueueAd()
+        server.enqueue(MockResponse().setBody("""{"result":"success"}"""))
+        enqueueAd()
+        server.enqueue(MockResponse().setResponseCode(401))
+        enqueueLogout()
+
+        val result = repository.markUnreadMessagesRead(
+            config,
+            listOf(
+                smsMessage(id = "101", isUnread = true),
+                smsMessage(id = "102", isUnread = true),
+                smsMessage(id = "103", isUnread = false)
+            )
+        )
+
+        assertTrue(result is ApiResult.Success)
+        val batch = (result as ApiResult.Success).value
+        assertEquals(setOf("101"), batch.successfulIds)
+        assertEquals(setOf("102"), batch.failedIds)
+
+        val requestBodies = List(server.requestCount) { server.takeRequest().body.readUtf8() }
+        assertEquals(
+            1,
+            requestBodies.count { body -> body.split("&").contains("goformId=LOGIN") }
+        )
+        assertEquals(
+            2,
+            requestBodies.count { it.contains("goformId=SET_MSG_READ") }
+        )
+    }
+
+    @Test
+    fun markUnreadMessagesRead_withNoUnreadMessagesDoesNotOpenSession() = runTest {
+        val result = repository.markUnreadMessagesRead(
+            config,
+            listOf(smsMessage(id = "101", isUnread = false))
+        )
+
+        assertTrue(result is ApiResult.Success)
+        val batch = (result as ApiResult.Success).value
+        assertTrue(batch.successfulIds.isEmpty())
+        assertTrue(batch.failedIds.isEmpty())
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
     fun deleteSms_loginFailureKeepsSpecificError() = runTest {
         server.enqueue(MockResponse().setBody("""{"LD":"LDVALUE"}"""))
         server.enqueue(MockResponse().setBody("""{"result":"3"}"""))
@@ -199,4 +248,15 @@ class SmsRepositoryTest {
         enqueueAd()
         server.enqueue(MockResponse().setBody("""{"result":"success"}"""))
     }
+
+    private fun smsMessage(id: String, isUnread: Boolean) = SmsMessage(
+        id = id,
+        number = "10086",
+        content = "message-$id",
+        rawContent = "message-$id",
+        date = "2026,06,08,23,59,01,+32",
+        tag = if (isUnread) "1" else "0",
+        isUnread = isUnread,
+        isFailed = false
+    )
 }

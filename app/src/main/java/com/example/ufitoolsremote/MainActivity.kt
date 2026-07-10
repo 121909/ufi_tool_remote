@@ -272,7 +272,10 @@ fun UfiRemoteApp(viewModel: MainViewModel = viewModel()) {
                 onLoginModeChange = viewModel::updateLoginMode,
                 onAccessModeChange = viewModel::updateUfiAccessMode,
                 onEasyTierEnabledChange = viewModel::setEasyTierEnabled,
-                onEasyTierChange = viewModel::updateEasyTier,
+                onEasyTierDraftChange = viewModel::updateEasyTierDraft,
+                onEasyTierPortDraftChange = viewModel::updateEasyTierSocks5PortDraft,
+                onApplyEasyTier = viewModel::applyEasyTierSettings,
+                onDiscardEasyTier = viewModel::discardEasyTierDraft,
                 onWidgetRefreshMinutesChange = viewModel::updateWidgetRefreshMinutes,
                 onAddQuickReply = viewModel::addQuickReply,
                 onQuickReplyChange = viewModel::updateQuickReply,
@@ -815,7 +818,10 @@ private fun SettingsTab(
     onLoginModeChange: (LoginModePreference) -> Unit,
     onAccessModeChange: (UfiAccessMode) -> Unit,
     onEasyTierEnabledChange: (Boolean) -> Unit,
-    onEasyTierChange: (EasyTierSettings.() -> EasyTierSettings) -> Unit,
+    onEasyTierDraftChange: (EasyTierSettings.() -> EasyTierSettings) -> Unit,
+    onEasyTierPortDraftChange: (String) -> Unit,
+    onApplyEasyTier: () -> Unit,
+    onDiscardEasyTier: () -> Unit,
     onWidgetRefreshMinutesChange: (Int) -> Unit,
     onAddQuickReply: () -> Unit,
     onQuickReplyChange: (QuickReplyPreset) -> Unit,
@@ -935,9 +941,16 @@ private fun SettingsTab(
             SectionHeader("EasyTier")
             EasyTierSettingsCard(
                 settings = state.settings.easyTier,
+                draft = state.easyTierDraft,
+                socks5PortDraft = state.easyTierSocks5PortDraft,
                 status = state.easyTierStatus,
+                validationError = state.easyTierValidationError,
+                hasChanges = state.hasEasyTierDraftChanges,
                 onEnabledChange = onEasyTierEnabledChange,
-                onChange = onEasyTierChange
+                onDraftChange = onEasyTierDraftChange,
+                onPortDraftChange = onEasyTierPortDraftChange,
+                onApply = onApplyEasyTier,
+                onDiscard = onDiscardEasyTier
             )
         }
 
@@ -967,10 +980,43 @@ private fun SettingsTab(
 @Composable
 private fun EasyTierSettingsCard(
     settings: EasyTierSettings,
+    draft: EasyTierSettings,
+    socks5PortDraft: String,
     status: EasyTierStatus,
+    validationError: String?,
+    hasChanges: Boolean,
     onEnabledChange: (Boolean) -> Unit,
-    onChange: (EasyTierSettings.() -> EasyTierSettings) -> Unit
+    onDraftChange: (EasyTierSettings.() -> EasyTierSettings) -> Unit,
+    onPortDraftChange: (String) -> Unit,
+    onApply: () -> Unit,
+    onDiscard: () -> Unit
 ) {
+    val showValidationErrors = validationError != null
+    val networkNameError = if (showValidationErrors && draft.networkName.isBlank()) {
+        "请输入 EasyTier 网络名"
+    } else {
+        null
+    }
+    val socks5HostError = if (
+        showValidationErrors && draft.socks5Enabled && draft.socks5Host.isBlank()
+    ) {
+        "请输入 SOCKS5 绑定地址"
+    } else {
+        null
+    }
+    val socks5PortError = if (
+        showValidationErrors &&
+        draft.socks5Enabled &&
+        socks5PortDraft.toIntOrNull()?.let { it in 1..65535 } != true
+    ) {
+        "端口必须是 1 到 65535 之间的整数"
+    } else {
+        null
+    }
+    val generalValidationError = validationError.takeIf {
+        networkNameError == null && socks5HostError == null && socks5PortError == null
+    }
+
     DashboardCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -994,20 +1040,34 @@ private fun EasyTierSettingsCard(
                 Spacer(Modifier.width(12.dp))
                 Switch(
                     checked = settings.enabled,
-                    onCheckedChange = onEnabledChange
+                    onCheckedChange = onEnabledChange,
+                    enabled = settings.enabled || !hasChanges
+                )
+            }
+            if (hasChanges) {
+                Text(
+                    if (settings.enabled) {
+                        "有未应用的修改；停用服务不会丢失草稿。"
+                    } else {
+                        "有未应用的修改，应用后才能启用 EasyTier。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary
                 )
             }
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
-                value = settings.networkName,
-                onValueChange = { value -> onChange { copy(networkName = value) } },
+                value = draft.networkName,
+                onValueChange = { value -> onDraftChange { copy(networkName = value) } },
                 label = { Text("网络名") },
-                singleLine = true
+                singleLine = true,
+                isError = networkNameError != null,
+                supportingText = networkNameError?.let { message -> { Text(message) } }
             )
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
-                value = settings.networkSecret,
-                onValueChange = { value -> onChange { copy(networkSecret = value) } },
+                value = draft.networkSecret,
+                onValueChange = { value -> onDraftChange { copy(networkSecret = value) } },
                 label = { Text("网络密钥") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation()
@@ -1015,71 +1075,96 @@ private fun EasyTierSettingsCard(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     modifier = Modifier.weight(1f),
-                    value = settings.instanceName,
-                    onValueChange = { value -> onChange { copy(instanceName = value) } },
+                    value = draft.instanceName,
+                    onValueChange = { value -> onDraftChange { copy(instanceName = value) } },
                     label = { Text("实例名") },
                     singleLine = true
                 )
                 OutlinedTextField(
                     modifier = Modifier.weight(1f),
-                    value = settings.hostname,
-                    onValueChange = { value -> onChange { copy(hostname = value) } },
+                    value = draft.hostname,
+                    onValueChange = { value -> onDraftChange { copy(hostname = value) } },
                     label = { Text("主机名") },
                     singleLine = true
                 )
             }
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
-                value = settings.virtualIpv4,
-                onValueChange = { value -> onChange { copy(virtualIpv4 = value) } },
+                value = draft.virtualIpv4,
+                onValueChange = { value -> onDraftChange { copy(virtualIpv4 = value) } },
                 label = { Text("虚拟 IPv4（可选）") },
                 singleLine = true
             )
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("SOCKS5 代理", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
                 Switch(
-                    checked = settings.socks5Enabled,
-                    onCheckedChange = { enabled -> onChange { copy(socks5Enabled = enabled) } }
+                    checked = draft.socks5Enabled,
+                    onCheckedChange = { enabled -> onDraftChange { copy(socks5Enabled = enabled) } }
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     modifier = Modifier.weight(1f),
-                    value = settings.socks5Host,
-                    onValueChange = { value -> onChange { copy(socks5Host = value) } },
+                    value = draft.socks5Host,
+                    onValueChange = { value -> onDraftChange { copy(socks5Host = value) } },
                     label = { Text("绑定地址") },
-                    singleLine = true
+                    singleLine = true,
+                    enabled = draft.socks5Enabled,
+                    isError = socks5HostError != null,
+                    supportingText = socks5HostError?.let { message -> { Text(message) } }
                 )
                 OutlinedTextField(
                     modifier = Modifier.width(120.dp),
-                    value = settings.socks5Port.toString(),
-                    onValueChange = { value -> value.toIntOrNull()?.let { port -> onChange { copy(socks5Port = port) } } },
+                    value = socks5PortDraft,
+                    onValueChange = onPortDraftChange,
                     label = { Text("端口") },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    enabled = draft.socks5Enabled,
+                    isError = socks5PortError != null,
+                    supportingText = socks5PortError?.let { message -> { Text(message) } }
                 )
             }
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
-                value = settings.peers.joinToString("\n"),
-                onValueChange = { value -> onChange { copy(peers = value.toLines()) } },
+                value = draft.peers.joinToString("\n"),
+                onValueChange = { value -> onDraftChange { copy(peers = value.toLines()) } },
                 label = { Text("对端地址，每行一个") },
                 minLines = 2
             )
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
-                value = settings.listeners.joinToString("\n"),
-                onValueChange = { value -> onChange { copy(listeners = value.toLines()) } },
+                value = draft.listeners.joinToString("\n"),
+                onValueChange = { value -> onDraftChange { copy(listeners = value.toLines()) } },
                 label = { Text("监听地址，每行一个") },
                 minLines = 2
             )
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
-                value = settings.proxyNetworks.joinToString("\n"),
-                onValueChange = { value -> onChange { copy(proxyNetworks = value.toLines()) } },
+                value = draft.proxyNetworks.joinToString("\n"),
+                onValueChange = { value -> onDraftChange { copy(proxyNetworks = value.toLines()) } },
                 label = { Text("代理网段，每行一个 CIDR") },
                 minLines = 2
             )
+            generalValidationError?.let { error ->
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(onClick = onDiscard, enabled = hasChanges) {
+                    Text("撤销修改")
+                }
+                Button(onClick = onApply, enabled = hasChanges) {
+                    Text("应用")
+                }
+            }
         }
     }
 }

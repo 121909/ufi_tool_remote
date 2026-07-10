@@ -61,17 +61,51 @@ class SmsRepository(private val api: UfiApiClient) {
         val trimmed = id.trim()
         if (trimmed.isBlank()) return ApiResult.DeviceError("缺少短信 ID")
         return withSession(config) { session ->
-            val first = markReadWithId(config, session, trimmed)
-            if (first is ApiResult.DeviceError && !trimmed.endsWith(";")) {
-                markReadWithId(config, session, "$trimmed;")
-            } else {
-                first
-            }
+            markReadWithFallback(config, session, trimmed)
         }
     }
 
-    suspend fun markUnreadMessagesRead(config: ConnectionConfig, messages: List<SmsMessage>) {
-        messages.filter { it.isUnread }.forEach { markRead(config, it.id) }
+    suspend fun markUnreadMessagesRead(
+        config: ConnectionConfig,
+        messages: List<SmsMessage>
+    ): ApiResult<MarkReadBatchResult> {
+        val unreadMessages = messages
+            .filter { it.isUnread && it.id.isNotBlank() }
+            .distinctBy { it.id.trim() }
+        if (unreadMessages.isEmpty()) {
+            return ApiResult.Success(MarkReadBatchResult())
+        }
+
+        return withSession(config) { session ->
+            val successfulIds = linkedSetOf<String>()
+            val failedIds = linkedSetOf<String>()
+            unreadMessages.forEach { message ->
+                val id = message.id.trim()
+                when (markReadWithFallback(config, session, id)) {
+                    is ApiResult.Success -> successfulIds += id
+                    else -> failedIds += id
+                }
+            }
+            ApiResult.Success(
+                MarkReadBatchResult(
+                    successfulIds = successfulIds,
+                    failedIds = failedIds
+                )
+            )
+        }
+    }
+
+    private suspend fun markReadWithFallback(
+        config: ConnectionConfig,
+        session: GoformSession,
+        id: String
+    ): ApiResult<Unit> {
+        val first = markReadWithId(config, session, id)
+        return if (first is ApiResult.DeviceError && !id.endsWith(";")) {
+            markReadWithId(config, session, "$id;")
+        } else {
+            first
+        }
     }
 
     private suspend fun deleteSmsWithId(
@@ -123,10 +157,10 @@ class SmsRepository(private val api: UfiApiClient) {
         return api.postForm(config, "/api/goform/goform_set_cmd_process", form, session.cookie).unitFromGoform()
     }
 
-    private suspend fun withSession(
+    private suspend fun <T> withSession(
         config: ConnectionConfig,
-        block: suspend (GoformSession) -> ApiResult<Unit>
-    ): ApiResult<Unit> {
+        block: suspend (GoformSession) -> ApiResult<T>
+    ): ApiResult<T> {
         val session = when (val login = api.loginGoform(config)) {
             is ApiResult.Success -> login.value
             is ApiResult.Unauthorized -> return login
@@ -187,3 +221,8 @@ class SmsRepository(private val api: UfiApiClient) {
 
     private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
 }
+
+data class MarkReadBatchResult(
+    val successfulIds: Set<String> = emptySet(),
+    val failedIds: Set<String> = emptySet()
+)
