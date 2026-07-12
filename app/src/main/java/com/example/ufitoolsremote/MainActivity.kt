@@ -1127,21 +1127,21 @@ private fun EasyTierSettingsCard(
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
                 value = draft.peers.joinToString("\n"),
-                onValueChange = { value -> onDraftChange { copy(peers = value.toLines()) } },
+                onValueChange = { value -> onDraftChange { copy(peers = value.toEditableLines()) } },
                 label = { Text("对端地址，每行一个") },
                 minLines = 2
             )
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
                 value = draft.listeners.joinToString("\n"),
-                onValueChange = { value -> onDraftChange { copy(listeners = value.toLines()) } },
+                onValueChange = { value -> onDraftChange { copy(listeners = value.toEditableLines()) } },
                 label = { Text("监听地址，每行一个") },
                 minLines = 2
             )
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
                 value = draft.proxyNetworks.joinToString("\n"),
-                onValueChange = { value -> onDraftChange { copy(proxyNetworks = value.toLines()) } },
+                onValueChange = { value -> onDraftChange { copy(proxyNetworks = value.toEditableLines()) } },
                 label = { Text("代理网段，每行一个 CIDR") },
                 minLines = 2
             )
@@ -1683,8 +1683,8 @@ private fun EasyTierPeerStatus.nextHopReadableParts(): List<String> {
         .distinct()
 }
 
-private fun String.toLines(): List<String> {
-    return lineSequence().map { it.trim() }.filter { it.isNotBlank() }.toList()
+internal fun String.toEditableLines(): List<String> {
+    return split('\n').map { it.removeSuffix("\r") }
 }
 
 private fun Long.formatBytes(): String {
